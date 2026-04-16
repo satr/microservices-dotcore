@@ -21,8 +21,11 @@ services:
       - "5778:5778"
       - "16686:16686"
       - "14268:14268"
+      - "4317:4317"
+      - "4318:4318"
     environment:
       - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+      - COLLECTOR_OTLP_ENABLED=true
 
   postgres:
     image: postgres:16
@@ -50,8 +53,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=users_db;Username=library;Password=library
-      - Jaeger__AgentHost=jaeger
-      - Jaeger__AgentPort=6831
+      - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,8 +70,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=books_db;Username=library;Password=library
-      - Jaeger__AgentHost=jaeger
-      - Jaeger__AgentPort=6831
+      - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,8 +90,7 @@ services:
       - RabbitMq__Username=guest
       - RabbitMq__Password=guest
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=booking_db;Username=library;Password=library
-      - Jaeger__AgentHost=jaeger
-      - Jaeger__AgentPort=6831
+      - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -111,8 +111,7 @@ services:
       - RabbitMq__Host=rabbitmq
       - RabbitMq__Username=guest
       - RabbitMq__Password=guest
-      - Jaeger__AgentHost=jaeger
-      - Jaeger__AgentPort=6831
+      - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -129,8 +128,7 @@ services:
       - ServiceEndpoints__Users=http://users-service:8080
       - ServiceEndpoints__Books=http://books-service:8080
       - ServiceEndpoints__Booking=http://booking-service:8080
-      - Jaeger__AgentHost=jaeger
-      - Jaeger__AgentPort=6831
+      - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
     depends_on:
       - users-service
       - books-service
@@ -141,4 +139,3 @@ services:
 
 volumes:
   postgres_data:
-

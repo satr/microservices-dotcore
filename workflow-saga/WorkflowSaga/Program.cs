@@ -1,7 +1,23 @@
 using MassTransit;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using WorkflowSaga.Saga;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("workflow-saga"))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddSource("MassTransit")
+            .AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(builder.Configuration["OpenTelemetry:OtlpEndpoint"] ?? "http://jaeger:4317");
+                options.Protocol = OtlpExportProtocol.Grpc;
+            });
+    });
 
 builder.Services.AddMassTransit(x =>
 {

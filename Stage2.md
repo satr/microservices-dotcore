@@ -1,193 +1,153 @@
-# Stage 2: Persistent Microservices (PostgreSQL + EF Core)
+# Stage 2: Resilience, Tracing, and Stock-Aware Saga
 
-## What Was Added
+## Scope Covered
 
-Stage 2 replaces in-memory data stores with PostgreSQL-backed repositories using
-Entity Framework Core, while keeping in-memory as a fallback for local development
-(no Docker required). Each service owns its own database — a core microservices
-principle.
+This stage now includes the set of Stage 2 requirements:
 
----
-
-## Architecture Change
-
-```
-Before (Stage 1):                    After (Stage 2):
-┌──────────────────┐                 ┌──────────────────┐
-│ UsersService     │                 │ UsersService     │
-│  InMemoryRepo    │                 │  PostgresRepo ───┼──▶ users_db
-└──────────────────┘                 └──────────────────┘
-┌──────────────────┐                 ┌──────────────────┐
-│ BooksService     │                 │ BooksService     │
-│  InMemoryRepo    │                 │  PostgresRepo ───┼──▶ books_db
-└──────────────────┘                 └──────────────────┘
-┌──────────────────┐                 ┌──────────────────┐
-│ BookingService   │                 │ BookingService   │
-│  InMemoryRepo    │                 │  PostgresRepo ───┼──▶ booking_db
-└──────────────────┘                 └──────────────────┘
-                                     All databases on one
-                                     postgres container
-                                     (per service in production)
-```
+1. Resilience patterns (retry / circuit-breaker direction)
+2. Distributed tracing (Jaeger integration foundation)
+3. Dedicated saga service placement (`workflow-saga`)
+4. Stock-aware booking flow with failure events
 
 ---
 
-## Files Added / Changed
+## What Was Implemented
 
-### New files
+### 1) Resilience patterns
 
-| File | Purpose |
-|---|---|
-| `services/UsersService/Data/UsersDbContext.cs` | EF Core DbContext for users; includes seeded `user1`, `user2` |
-| `services/UsersService/Data/UsersDbContextFactory.cs` | Design-time factory for `dotnet ef` tooling |
-| `services/UsersService/Data/Migrations/` | EF Core `InitialCreate` migration |
-| `services/UsersService/Repositories/PostgresUserRepository.cs` | PostgreSQL implementation of `IUserRepository` |
-| `services/BooksService/Data/BooksDbContext.cs` | EF Core DbContext for books; includes seeded `Book1–3` |
-| `services/BooksService/Data/BooksDbContextFactory.cs` | Design-time factory |
-| `services/BooksService/Data/Migrations/` | EF Core `InitialCreate` migration |
-| `services/BooksService/Repositories/PostgresBookRepository.cs` | PostgreSQL implementation of `IBookRepository` |
-| `services/BookingService/Data/CartItemEntity.cs` | EF Core entity class (mutable, has PK) |
-| `services/BookingService/Data/BookingDbContext.cs` | EF Core DbContext for cart items |
-| `services/BookingService/Data/BookingDbContextFactory.cs` | Design-time factory |
-| `services/BookingService/Data/Migrations/` | EF Core `InitialCreate` migration |
-| `docker/postgres-init.sql` | Creates `users_db`, `books_db`, `booking_db` on first container start |
+- `frontend` now uses Polly retry policy for calls to `booking-service`.
+- Retry behavior: 3 retries with exponential backoff.
+- A failure simulation path was added so transient failures can be observed during booking flow tests.
 
-### Modified files
-
-| File | Change |
-|---|---|
-| `services/UsersService/Models/UserRecord.cs` | Converted from `record` to `class` for EF Core compatibility |
-| `services/BooksService/Models/BookRecord.cs` | Converted from `record` to `class` for EF Core compatibility |
-| `services/UsersService/Program.cs` | Registers PostgresRepo when connection string is present; runs migrations at startup |
-| `services/BooksService/Program.cs` | Same pattern |
-| `services/BookingService/Program.cs` | Same pattern |
-| `services/BookingService/Repositories/PostgresCartRepository.cs` | Replaced stub with full EF Core implementation |
-| `docker-compose.yml` | Mounts init SQL, adds `ConnectionStrings__DefaultConnection` env var per service, adds `postgres` healthcheck dependency |
+Relevant files:
+- `frontend/LibraryWeb/Pages/Index.cshtml.cs`
+- `frontend/LibraryWeb/Program.cs`
+- `services/BookingService/Services/BookInventoryService.cs`
 
 ---
 
-## Database-Per-Service Design
+### 2) Distributed tracing (Jaeger)
 
-Each service has its own database on the shared PostgreSQL container:
+- Jaeger service was added to container orchestration.
+- Service environment variables for Jaeger agent host/port were added in compose configuration.
+- OpenTelemetry/Jaeger package dependencies were added as a tracing foundation.
 
-| Service | Database | Tables |
-|---|---|---|
-| UsersService | `users_db` | `Users` |
-| BooksService | `books_db` | `Books` |
-| BookingService | `booking_db` | `CartItems` |
-
-The databases are created by `docker/postgres-init.sql` on first container start.
-
----
-
-## Repository Pattern
-
-The `ICartRepository`, `IBookRepository`, and `IUserRepository` interfaces are
-**unchanged**. The only difference is which implementation is injected:
-
-```csharp
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (!string.IsNullOrWhiteSpace(connectionString))
-{
-    builder.Services.AddDbContext<UsersDbContext>(opt => opt.UseNpgsql(connectionString));
-    builder.Services.AddSingleton<IUserRepository, PostgresUserRepository>();   // ← NEW
-}
-else
-{
-    builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();   // ← fallback
-}
-```
-
-This means:
-- **No connection string** → in-memory (local dev, tests, CI without Docker)
-- **Connection string present** → PostgreSQL (Docker, staging, production)
+Relevant files:
+- `docker-compose.yml`
+- `services/BookingService/appsettings.json`
+- `services/*/*.csproj` and `frontend/LibraryWeb/LibraryWeb.csproj` (package references)
 
 ---
 
-## Migrations
+### 3) Saga placement: dedicated workflow service
 
-EF Core migrations are stored per service:
+- Saga remains in the separate `.NET` service: `workflow-saga/WorkflowSaga`.
+- This keeps orchestration outside feature APIs (`users`, `books`, `booking`) and follows the planned separation of concerns.
 
-```
-services/UsersService/Data/Migrations/
-services/BooksService/Data/Migrations/
-services/BookingService/Data/Migrations/
-```
-
-Migrations are applied **automatically at startup** via `db.Database.Migrate()`.
-This is suitable for development and small deployments. For production, prefer
-running migrations as a separate init step or Kubernetes Job.
-
-### Add a new migration (per service)
-```bash
-export PATH="$PATH:$HOME/.dotnet/tools"
-
-dotnet ef migrations add <MigrationName> \
-  --project services/UsersService/UsersService.csproj \
-  --output-dir Data/Migrations
-
-dotnet ef migrations add <MigrationName> \
-  --project services/BooksService/BooksService.csproj \
-  --output-dir Data/Migrations
-
-dotnet ef migrations add <MigrationName> \
-  --project services/BookingService/BookingService.csproj \
-  --output-dir Data/Migrations
-```
+Relevant files:
+- `workflow-saga/WorkflowSaga/Saga/BorrowingStateMachine.cs`
+- `workflow-saga/WorkflowSaga/Program.cs`
 
 ---
 
-## Seeded Data
+### 4) Stock-aware booking behavior
 
-Seeding is defined in `OnModelCreating` using `HasData`:
+- Booking inventory model was introduced with per-book stock (`default = 10`).
+- Stock data is managed in booking persistence context.
+- Saga flow now supports add-to-cart failure signaling when stock checks fail.
+- New events and consumers were added to handle success/failure paths and cart-removal confirmation.
 
-**UsersDbContext** → `user1 (u1)`, `user2 (u2)`
-
-**BooksDbContext** → `Book1/Author1 (b1)`, `Book2/Author2 (b2)`, `Book3/Author3 (b3)`
-
-Seeds are applied as part of the `InitialCreate` migration.
+Relevant files:
+- `services/BookingService/Data/BookingInventoryDbContext.cs`
+- `services/BookingService/Services/BookInventoryService.cs`
+- `shared/Library.Contracts/Class1.cs`
+- `services/BookingService/Consumers/AddToCartFailedConsumer.cs`
+- `services/BookingService/Consumers/CartItemRemovalConfirmedConsumer.cs`
+- `workflow-saga/WorkflowSaga/Saga/BorrowingStateMachine.cs`
 
 ---
 
-## Local Development (no Docker)
+## PostgreSQL status (kept from earlier Stage 2 work)
 
-Run any service without Docker — it falls back to in-memory automatically:
+- Services are PostgreSQL-ready and use EF Core migrations.
+- Data remains split per service database (`users_db`, `books_db`, `booking_db`).
+- In-memory fallback still exists when no connection string is provided.
+
+Relevant files:
+- `services/UsersService/Data/*`
+- `services/BooksService/Data/*`
+- `services/BookingService/Data/*`
+- `docker/postgres-init.sql`
+
+---
+
+## How to Inspect Jaeger, RabbitMQ, and PostgreSQL Objects
+
+### Jaeger traces
+
+1. Start the stack:
 
 ```bash
-cd services/UsersService
-dotnet run
-# → InMemoryUserRepository activated (no connection string)
+make up
+```
+
+2. Open Jaeger UI:
+- `http://localhost:16686`
+
+3. In Jaeger UI:
+- Choose service (for example `frontend`, `booking-service`, `workflow-saga`)
+- Click **Find Traces**
+- Open a trace to inspect spans and cross-service flow
+
+### RabbitMQ objects (queues, exchanges, bindings)
+
+1. Open RabbitMQ Management UI:
+- `http://localhost:15672`
+- default credentials: `guest` / `guest`
+
+2. Inspect objects:
+- **Queues** tab: message queues created by MassTransit consumers
+- **Exchanges** tab: published event exchanges
+- **Bindings** tab: routing between exchanges and queues
+
+3. Optional CLI inspection:
+
+```bash
+docker compose exec rabbitmq rabbitmqctl list_queues
+
+docker compose exec rabbitmq rabbitmqctl list_exchanges
+
+docker compose exec rabbitmq rabbitmqctl list_bindings
+```
+
+### PostgreSQL objects (databases, tables, rows)
+
+1. Connect with `psql` inside container:
+
+```bash
+docker compose exec postgres psql -U library -d booking_db
+```
+
+2. Useful SQL commands:
+
+```sql
+\l
+\dt
+SELECT * FROM "CartItems";
+SELECT * FROM "BookInventories";
+```
+
+3. Check other service databases:
+
+```bash
+docker compose exec postgres psql -U library -d users_db
+
+docker compose exec postgres psql -U library -d books_db
 ```
 
 ---
 
-## Running with PostgreSQL
+## Notes
 
-```bash
-make up   # starts all containers including postgres
-```
-
-On first start:
-1. `postgres-init.sql` creates `users_db`, `books_db`, `booking_db`
-2. Each service runs `db.Database.Migrate()` and creates its tables
-3. Seeded users and books are inserted via `HasData`
-
-Subsequent restarts: data is **persisted** in the `postgres_data` Docker volume.
-
-```bash
-make clean   # stops containers AND deletes the postgres_data volume (resets all data)
-```
-
----
-
-## What's Still Missing for Production
-
-| Concern | Status |
-|---|---|
-| Per-service PostgreSQL container | ⚠️ Shared instance (databases separated) |
-| Connection string secrets | ⚠️ Plain env vars (use Vault or K8s secrets in prod) |
-| Migration as CI/CD step | ⚠️ Auto-migrate at startup (use separate job in prod) |
-| Database backups | ❌ Not configured |
-| Read replicas / connection pooling (PgBouncer) | ❌ Not configured |
-| Resiliency to DB unavailability at startup | ⚠️ Basic (relies on healthcheck ordering) |
-
+- This stage delivers the requested architecture pieces and event flow extensions.
+- Tracing and resilience are implemented as a practical foundation and can be hardened further in next stages (for example, full circuit-breaker policy wiring and trace dashboards/alerts).
