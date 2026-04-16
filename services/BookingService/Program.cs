@@ -1,15 +1,25 @@
 using BookingService.Consumers;
+using BookingService.Data;
 using BookingService.Repositories;
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<ICartRepository, InMemoryCartRepository>();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    builder.Services.AddDbContext<BookingDbContext>(opt =>
+        opt.UseNpgsql(connectionString));
+    builder.Services.AddSingleton<ICartRepository, PostgresCartRepository>();
+}
+else
+{
+    builder.Services.AddSingleton<ICartRepository, InMemoryCartRepository>();
+}
 
 builder.Services.AddMassTransit(x =>
 {
@@ -31,14 +41,22 @@ builder.Services.AddMassTransit(x =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Apply EF migrations on startup when using PostgreSQL.
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+    db.Database.Migrate();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
+
+

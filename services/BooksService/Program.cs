@@ -1,17 +1,34 @@
+using BooksService.Data;
 using BooksService.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    builder.Services.AddDbContext<BooksDbContext>(opt =>
+        opt.UseNpgsql(connectionString));
+    builder.Services.AddSingleton<IBookRepository, PostgresBookRepository>();
+}
+else
+{
+    builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
+}
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Apply EF migrations / seed data on startup when using PostgreSQL.
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BooksDbContext>();
+    db.Database.Migrate();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -21,3 +38,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
