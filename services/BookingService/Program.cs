@@ -1,6 +1,7 @@
 using BookingService.Consumers;
 using BookingService.Data;
 using BookingService.Repositories;
+using BookingService.Services;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +15,8 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddDbContext<BookingDbContext>(opt =>
         opt.UseNpgsql(connectionString));
+    builder.Services.AddDbContext<BookingInventoryDbContext>(opt =>
+        opt.UseNpgsql(connectionString));
     builder.Services.AddSingleton<ICartRepository, PostgresCartRepository>();
 }
 else
@@ -21,11 +24,15 @@ else
     builder.Services.AddSingleton<ICartRepository, InMemoryCartRepository>();
 }
 
+builder.Services.AddSingleton<IBookInventoryService, BookInventoryService>();
+
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<CartItemAddedConsumer>();
     x.AddConsumer<CartItemRemovedConsumer>();
     x.AddConsumer<BorrowingCompletedConsumer>();
+    x.AddConsumer<AddToCartFailedConsumer>();
+    x.AddConsumer<CartItemRemovalConfirmedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
@@ -46,7 +53,9 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+    var inventoryDb = scope.ServiceProvider.GetRequiredService<BookingInventoryDbContext>();
     db.Database.Migrate();
+    inventoryDb.Database.Migrate();
 }
 
 if (app.Environment.IsDevelopment())
@@ -58,5 +67,9 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
+
+
 
 

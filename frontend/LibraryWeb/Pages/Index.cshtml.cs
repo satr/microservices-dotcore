@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Polly;
 
 namespace LibraryWeb.Pages;
 
@@ -8,11 +9,23 @@ public class IndexModel : PageModel
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
 
     public IndexModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        
+        _retryPolicy = Policy
+            .Handle<HttpRequestException>()
+            .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+                onRetry: (outcome, timespan, retryCount, _) =>
+                {
+                    Console.WriteLine($"Retry {retryCount} after {timespan.TotalSeconds}s due to {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}");
+                });
     }
 
     [BindProperty]
@@ -100,9 +113,30 @@ public class IndexModel : PageModel
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
 
-        var result = await client.PostAsJsonAsync($"{bookingBase}/api/cart/items", new AddCartItemRequest(userId, bookId, title, author));
-
-        Message = result.IsSuccessStatusCode ? "Added to cart." : "Could not add to cart.";
+        try
+        {
+            var result = await _retryPolicy.ExecuteAsync(async () =>
+                await client.PostAsJsonAsync($"{bookingBase}/api/cart/items", 
+                    new AddCartItemRequest(userId, bookId, title, author))
+            );
+            
+            if (result.IsSuccessStatusCode)
+            {
+                Message = "Added to cart.";
+            }
+            else if (result.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                Message = $"Unable to add book to cart - book may be out of stock.";
+            }
+            else
+            {
+                Message = "Could not add to cart. Please try again.";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Message = $"Service temporarily unavailable after retries. ({ex.Message})";
+        }
 
         if (!string.IsNullOrWhiteSpace(SearchQuery))
         {
@@ -121,3 +155,4 @@ public class IndexModel : PageModel
 
     public sealed record AddCartItemRequest(string UserId, string BookId, string Title, string Author);
 }
+

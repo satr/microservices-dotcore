@@ -34,3 +34,21 @@ public sealed record CartItemRemoved(
 public sealed record BorrowingCompleted(
     Guid CorrelationId,
     string UserId);
+
+// Failure events
+public sealed record AddToCartFailed(
+    Guid CorrelationId,
+    string UserId,
+    string BookId,
+    string Reason);
+
+public sealed record CartItemRemovalConfirmed(
+    Guid CorrelationId,
+    string UserId,
+    string BookId);
+
+public sealed record BookStockRestored(
+    Guid CorrelationId,
+    string BookId,
+    int QuantityRestored);
+
