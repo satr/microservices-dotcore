@@ -60,5 +60,53 @@ public sealed class PostgresCartRepository : ICartRepository
         db.CartItems.RemoveRange(items);
         db.SaveChanges();
     }
+
+    public void RecordFailure(string userId, string bookId, string title, string author, string reason)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+        // Remove any existing failure for this book
+        var existing = db.CartItemFailures
+            .FirstOrDefault(f => f.UserId == userId && f.BookId == bookId);
+        if (existing is not null)
+        {
+            db.CartItemFailures.Remove(existing);
+        }
+        // Add new failure
+        db.CartItemFailures.Add(new CartItemFailureEntity
+        {
+            UserId = userId,
+            BookId = bookId,
+            Title = title,
+            Author = author,
+            Reason = reason,
+            FailedAtUtc = DateTime.UtcNow
+        });
+        db.SaveChanges();
+    }
+
+    public IReadOnlyList<CartItemFailure> GetFailuresByUser(string userId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+        return db.CartItemFailures.AsNoTracking()
+            .Where(f => f.UserId == userId)
+            .OrderByDescending(f => f.FailedAtUtc)
+            .Select(f => new CartItemFailure(f.BookId, f.Title, f.Author, f.Reason, f.FailedAtUtc))
+            .ToArray();
+    }
+
+    public void ClearFailure(string userId, string bookId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+        var entity = db.CartItemFailures
+            .FirstOrDefault(f => f.UserId == userId && f.BookId == bookId);
+        if (entity is not null)
+        {
+            db.CartItemFailures.Remove(entity);
+            db.SaveChanges();
+        }
+    }
 }
 

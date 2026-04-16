@@ -61,5 +61,18 @@ public sealed class CartController : ControllerBase
 
         return Accepted();
     }
+
+    [HttpGet("failures/{userId}")]
+    public IActionResult GetFailures(string userId)
+    {
+        return Ok(_carts.GetFailuresByUser(userId));
+    }
+
+    [HttpDelete("failures/{userId}/{bookId}")]
+    public IActionResult ClearFailure(string userId, string bookId)
+    {
+        _carts.ClearFailure(userId, bookId);
+        return NoContent();
+    }
 }
 

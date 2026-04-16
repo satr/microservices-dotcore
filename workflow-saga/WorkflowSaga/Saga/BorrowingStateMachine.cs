@@ -31,7 +31,7 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                     ctx.Saga.Author = ctx.Message.Author;
                 })
                 .IfElse(
-                    ctx => ctx.Message.BookId != "b2", // Simulate b2 being out of stock initially
+                    ctx => IsBookInStock(ctx.Message.BookId),
                     ifTrue => ifTrue
                         .Publish(ctx => new CartItemAdded(
                             ctx.Saga.CorrelationId,
@@ -46,7 +46,7 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                             ctx.Saga.CorrelationId,
                             ctx.Message.UserId,
                             ctx.Message.BookId,
-                            "Book is currently out of stock"))
+                            "Book is currently out of stock or inventory service unavailable"))
                         .TransitionTo(Failed)
                         .Finalize()
                 ),
@@ -73,6 +73,17 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                 .Finalize());
 
         SetCompletedWhenFinalized();
+    }
+
+    /// <summary>
+    /// Simulate stock check with 50% random failure rate using book ID hash.
+    /// This demonstrates the inventory service's unreliability pattern.
+    /// </summary>
+    private static bool IsBookInStock(string bookId)
+    {
+        // Use book ID hash to seed pseudo-random decision (50/50 chance of success)
+        var hash = bookId.GetHashCode();
+        return (Math.Abs(hash) % 2) == 0;
     }
 }
 
