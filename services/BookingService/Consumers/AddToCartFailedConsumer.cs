@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using Library.Contracts.Messages;
 using MassTransit;
+using Microsoft.Extensions.Logging;
 
 namespace BookingService.Consumers;
 

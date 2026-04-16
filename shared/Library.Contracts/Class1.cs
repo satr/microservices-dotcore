@@ -1,4 +1,6 @@
-﻿namespace Library.Contracts.Messages;
+﻿using System;
+
+namespace Library.Contracts.Messages;
 
 public sealed record AddToCartRequested(
     Guid CorrelationId,
