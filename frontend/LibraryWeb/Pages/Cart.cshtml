@@ -19,6 +19,33 @@
     <div class="alert alert-success">@Model.Message</div>
 }
 
+@if (Model.Failures.Count > 0)
+{
+    <div class="alert alert-warning">
+        <div class="fw-semibold mb-2">Some cart actions failed</div>
+        <ul class="list-group list-group-flush">
+            @foreach (var failure in Model.Failures)
+            {
+                var displayTitle = string.IsNullOrWhiteSpace(failure.Title) ? failure.BookId : failure.Title;
+                <li class="list-group-item px-0 d-flex justify-content-between align-items-start bg-transparent">
+                    <div>
+                        <strong>@displayTitle</strong>
+                        @if (!string.IsNullOrWhiteSpace(failure.Author))
+                        {
+                            <span> — @failure.Author</span>
+                        }
+                        <div class="text-muted small">@failure.Reason</div>
+                    </div>
+                    <form method="post" asp-page-handler="DismissFailure" class="ms-3">
+                        <input type="hidden" name="bookId" value="@failure.BookId" />
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
 @if (Model.Items.Count == 0)
 {
     <p class="text-muted">Your cart is empty.</p>

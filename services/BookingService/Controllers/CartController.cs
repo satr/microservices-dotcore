@@ -62,6 +62,7 @@ public sealed class CartController : ControllerBase
         return Accepted();
     }
 
+    // ReSharper disable once UnusedMember.Global
     [HttpGet("failures/{userId}")]
     public IActionResult GetFailures(string userId)
     {

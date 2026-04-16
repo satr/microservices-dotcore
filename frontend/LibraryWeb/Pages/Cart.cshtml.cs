@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -21,6 +20,7 @@ public class CartModel : PageModel
     public string? Message { get; private set; }
 
     public List<CartItemDto> Items { get; private set; } = [];
+    public List<CartFailureDto> Failures { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
@@ -38,6 +38,22 @@ public class CartModel : PageModel
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
         await client.DeleteAsync($"{bookingBase}/api/cart/items/{Uri.EscapeDataString(bookId)}?userId={Uri.EscapeDataString(userId)}");
+
+        await LoadCartAsync();
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostDismissFailureAsync(string bookId)
+    {
+        var userId = CurrentUserId;
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return RedirectToPage("/Index");
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
+        await client.DeleteAsync($"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
 
         await LoadCartAsync();
         return Page();
@@ -67,6 +83,7 @@ public class CartModel : PageModel
         if (string.IsNullOrWhiteSpace(userId))
         {
             Items = [];
+            Failures = [];
             return;
         }
 
@@ -75,8 +92,13 @@ public class CartModel : PageModel
         Items = await client.GetFromJsonAsync<List<CartItemDto>>(
                     $"{bookingBase}/api/cart/{Uri.EscapeDataString(userId)}")
                 ?? [];
+
+        Failures = await client.GetFromJsonAsync<List<CartFailureDto>>(
+                       $"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}")
+                   ?? [];
     }
 
     public sealed record CartItemDto(string BookId, string Title, string Author);
+    public sealed record CartFailureDto(string BookId, string Title, string Author, string Reason, DateTime FailedAtUtc);
 }
 
