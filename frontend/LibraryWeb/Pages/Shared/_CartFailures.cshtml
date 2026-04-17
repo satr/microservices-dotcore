@@ -1,0 +1,29 @@
+@model IReadOnlyList<LibraryWeb.Models.CartFailureDto>
+
+@if (Model.Count > 0)
+{
+    <div class="alert alert-warning">
+        <div class="fw-semibold mb-2">Some cart actions failed</div>
+        <ul class="list-group list-group-flush">
+            @foreach (var failure in Model)
+            {
+                var displayTitle = string.IsNullOrWhiteSpace(failure.Title) ? failure.BookId : failure.Title;
+                <li class="list-group-item px-0 d-flex justify-content-between align-items-start bg-transparent">
+                    <div>
+                        <strong>@displayTitle</strong>
+                        @if (!string.IsNullOrWhiteSpace(failure.Author))
+                        {
+                            <span> - @failure.Author</span>
+                        }
+                        <div class="text-muted small">@failure.Reason</div>
+                    </div>
+                    <form method="post" asp-page-handler="DismissFailure" class="ms-3">
+                        <input type="hidden" name="bookId" value="@failure.BookId" />
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    </div>
+}
+

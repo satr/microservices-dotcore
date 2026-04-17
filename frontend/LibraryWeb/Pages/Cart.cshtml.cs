@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using LibraryWeb.Models;
 
 namespace LibraryWeb.Pages;
 
@@ -99,6 +100,5 @@ public class CartModel : PageModel
     }
 
     public sealed record CartItemDto(string BookId, string Title, string Author);
-    public sealed record CartFailureDto(string BookId, string Title, string Author, string Reason, DateTime FailedAtUtc);
 }
 

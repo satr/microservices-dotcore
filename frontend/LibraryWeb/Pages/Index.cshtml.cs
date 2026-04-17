@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Configuration;
+using LibraryWeb.Models;
 using Polly;
 
 namespace LibraryWeb.Pages;
@@ -47,10 +48,11 @@ public class IndexModel : PageModel
     public string? CurrentUserName => HttpContext.Session.GetString("userName");
 
     public List<BookDto> Books { get; private set; } = [];
+    public List<CartFailureDto> Failures { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
-        await Task.CompletedTask;
+        await LoadFailuresAsync();
     }
 
     public async Task<IActionResult> OnPostLoginAsync()
@@ -90,6 +92,22 @@ public class IndexModel : PageModel
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostDismissFailureAsync(string bookId)
+    {
+        var userId = CurrentUserId;
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return RedirectToPage();
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
+        await client.DeleteAsync($"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
+
+        await LoadFailuresAsync();
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostSearchAsync()
     {
         if (string.IsNullOrWhiteSpace(SearchQuery))
@@ -103,6 +121,8 @@ public class IndexModel : PageModel
         Books = await client.GetFromJsonAsync<List<BookDto>>(
                     $"{booksBase}/api/books/search?query={Uri.EscapeDataString(SearchQuery)}")
                 ?? [];
+
+        await LoadFailuresAsync();
 
         return Page();
     }
@@ -152,7 +172,25 @@ public class IndexModel : PageModel
                     ?? [];
         }
 
+        await LoadFailuresAsync();
+
         return Page();
+    }
+
+    private async Task LoadFailuresAsync()
+    {
+        var userId = CurrentUserId;
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            Failures = [];
+            return;
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
+        Failures = await client.GetFromJsonAsync<List<CartFailureDto>>(
+                       $"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}")
+                   ?? [];
     }
 
     public sealed record UserDto(string Id, string UserName);

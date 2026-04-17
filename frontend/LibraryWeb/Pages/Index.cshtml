@@ -11,6 +11,8 @@
     <div class="alert alert-info">@Model.Message</div>
 }
 
+<partial name="Shared/_CartFailures" model="Model.Failures" />
+
 @if (string.IsNullOrWhiteSpace(Model.CurrentUserId))
 {
     <form method="post" asp-page-handler="Login" class="mb-4">
