@@ -62,7 +62,6 @@ Relevant files:
 - `services/BookingService/Services/BookInventoryService.cs`
 - `shared/Library.Contracts/Class1.cs`
 - `services/BookingService/Consumers/AddToCartFailedConsumer.cs`
-- `services/BookingService/Consumers/CartItemRemovalConfirmedConsumer.cs`
 - `workflow-saga/WorkflowSaga/Saga/BorrowingStateMachine.cs`
 
 ---

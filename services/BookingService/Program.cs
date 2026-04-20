@@ -1,7 +1,9 @@
 using BookingService.Consumers;
 using BookingService.Data;
+using BookingService.Messaging;
 using BookingService.Repositories;
 using BookingService.Services;
+using Library.Contracts.Messages;
 using MassTransit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +50,8 @@ else
 
 builder.Services.AddSingleton<IBookInventoryService, BookInventoryService>();
 
+var messagingProvider = builder.Configuration["Messaging:Provider"] ?? "RabbitMq";
+
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<CartItemAddedConsumer>();
@@ -55,16 +59,71 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<BorrowingCompletedConsumer>();
     x.AddConsumer<AddToCartFailedConsumer>();
 
-    x.UsingRabbitMq((context, cfg) =>
+    if (messagingProvider == "Kafka")
     {
-        cfg.Host(builder.Configuration["RabbitMq:Host"] ?? "rabbitmq", "/", host =>
+        var kafkaBootstrap = builder.Configuration["Kafka:BootstrapServers"] ?? "kafka:9092";
+        var topicPrefix   = builder.Configuration["Kafka:TopicPrefix"] ?? "library";
+
+        // InMemory bus keeps MassTransit pipeline intact; Kafka Rider handles real I/O
+        x.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
+
+        x.AddRider(rider =>
         {
-            host.Username(builder.Configuration["RabbitMq:Username"] ?? "guest");
-            host.Password(builder.Configuration["RabbitMq:Password"] ?? "guest");
+            // Register Kafka producers (used by KafkaCartCommandPublisher)
+            rider.AddProducer<AddToCartRequested>($"{topicPrefix}.add-to-cart-requested");
+            rider.AddProducer<RemoveFromCartRequested>($"{topicPrefix}.remove-from-cart-requested");
+            rider.AddProducer<CompleteBorrowingRequested>($"{topicPrefix}.complete-borrowing-requested");
+
+            // Register consumers for outcome events published by workflow-saga
+            rider.AddConsumer<CartItemAddedConsumer>();
+            rider.AddConsumer<CartItemRemovedConsumer>();
+            rider.AddConsumer<BorrowingCompletedConsumer>();
+            rider.AddConsumer<AddToCartFailedConsumer>();
+
+            rider.UsingKafka((context, k) =>
+            {
+                k.Host(kafkaBootstrap);
+
+                k.TopicEndpoint<CartItemAdded>($"{topicPrefix}.cart-item-added", "booking-service", e =>
+                {
+                    e.AutoOffsetReset = Confluent.Kafka.AutoOffsetReset.Earliest;
+                    e.ConfigureConsumer<CartItemAddedConsumer>(context);
+                });
+                k.TopicEndpoint<CartItemRemoved>($"{topicPrefix}.cart-item-removed", "booking-service", e =>
+                {
+                    e.AutoOffsetReset = Confluent.Kafka.AutoOffsetReset.Earliest;
+                    e.ConfigureConsumer<CartItemRemovedConsumer>(context);
+                });
+                k.TopicEndpoint<BorrowingCompleted>($"{topicPrefix}.borrowing-completed", "booking-service", e =>
+                {
+                    e.AutoOffsetReset = Confluent.Kafka.AutoOffsetReset.Earliest;
+                    e.ConfigureConsumer<BorrowingCompletedConsumer>(context);
+                });
+                k.TopicEndpoint<AddToCartFailed>($"{topicPrefix}.add-to-cart-failed", "booking-service", e =>
+                {
+                    e.AutoOffsetReset = Confluent.Kafka.AutoOffsetReset.Earliest;
+                    e.ConfigureConsumer<AddToCartFailedConsumer>(context);
+                });
+            });
         });
 
-        cfg.ConfigureEndpoints(context);
-    });
+        builder.Services.AddScoped<ICartCommandPublisher, KafkaCartCommandPublisher>();
+    }
+    else
+    {
+        x.UsingRabbitMq((context, cfg) =>
+        {
+            cfg.Host(builder.Configuration["RabbitMq:Host"] ?? "rabbitmq", "/", host =>
+            {
+                host.Username(builder.Configuration["RabbitMq:Username"] ?? "guest");
+                host.Password(builder.Configuration["RabbitMq:Password"] ?? "guest");
+            });
+
+            cfg.ConfigureEndpoints(context);
+        });
+
+        builder.Services.AddScoped<ICartCommandPublisher, RabbitMqCartCommandPublisher>();
+    }
 });
 
 var app = builder.Build();

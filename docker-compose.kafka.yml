@@ -18,6 +18,8 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_NUM_PARTITIONS=3
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -25,6 +27,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.add-to-cart-requested       --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.remove-from-cart-requested   --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.complete-borrowing-requested --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.cart-item-added             --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.cart-item-removed           --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.borrowing-completed         --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic library.add-to-cart-failed          --partitions 3 --replication-factor 1
+      echo 'All topics created.'
+      "
+    restart: "no"
 
   kafka-ui:
     image: kafbat/kafka-ui:v1.0.0
@@ -38,6 +60,23 @@ services:
       kafka:
         condition: service_healthy
 
+  booking-service:
+    environment:
+      - Messaging__Provider=Kafka
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__TopicPrefix=library
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+  workflow-saga:
+    environment:
+      - Messaging__Provider=Kafka
+      - Kafka__BootstrapServers=kafka:9092
+      - Kafka__TopicPrefix=library
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
 volumes:
   kafka_data:
-

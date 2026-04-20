@@ -33,20 +33,28 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                 .IfElse(
                     ctx => IsBookInStock(ctx.Message.BookId),
                     ifTrue => ifTrue
-                        .Publish(ctx => new CartItemAdded(
-                            ctx.Saga.CorrelationId,
-                            ctx.Message.UserId,
-                            ctx.Message.BookId,
-                            ctx.Message.Title,
-                            ctx.Message.Author))
+                        .ThenAsync(async ctx =>
+                        {
+                            var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
+                            await publisher.PublishCartItemAdded(new CartItemAdded(
+                                ctx.Saga.CorrelationId,
+                                ctx.Saga.UserId,
+                                ctx.Saga.BookId!,
+                                ctx.Saga.Title!,
+                                ctx.Saga.Author!));
+                        })
                         .TransitionTo(Requested)
                         .Finalize(),
                     ifFalse => ifFalse
-                        .Publish(ctx => new AddToCartFailed(
-                            ctx.Saga.CorrelationId,
-                            ctx.Message.UserId,
-                            ctx.Message.BookId,
-                            "Book is currently out of stock or inventory service unavailable"))
+                        .ThenAsync(async ctx =>
+                        {
+                            var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
+                            await publisher.PublishAddToCartFailed(new AddToCartFailed(
+                                ctx.Saga.CorrelationId,
+                                ctx.Saga.UserId,
+                                ctx.Saga.BookId!,
+                                "Book is currently out of stock or inventory service unavailable"));
+                        })
                         .TransitionTo(Failed)
                         .Finalize()
                 ),
@@ -57,18 +65,26 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                     ctx.Saga.UserId = ctx.Message.UserId;
                     ctx.Saga.BookId = ctx.Message.BookId;
                 })
-                .Publish(ctx => new CartItemRemoved(
-                    ctx.Saga.CorrelationId,
-                    ctx.Message.UserId,
-                    ctx.Message.BookId))
+                .ThenAsync(async ctx =>
+                {
+                    var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
+                    await publisher.PublishCartItemRemoved(new CartItemRemoved(
+                        ctx.Saga.CorrelationId,
+                        ctx.Saga.UserId,
+                        ctx.Saga.BookId!));
+                })
                 .TransitionTo(ItemRemoved)
                 .Finalize(),
 
             When(CompleteBorrowingRequestedEvent)
                 .Then(ctx => ctx.Saga.UserId = ctx.Message.UserId)
-                .Publish(ctx => new BorrowingCompleted(
-                    ctx.Saga.CorrelationId,
-                    ctx.Message.UserId))
+                .ThenAsync(async ctx =>
+                {
+                    var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
+                    await publisher.PublishBorrowingCompleted(new BorrowingCompleted(
+                        ctx.Saga.CorrelationId,
+                        ctx.Saga.UserId));
+                })
                 .TransitionTo(Requested)
                 .Finalize());
 
@@ -81,10 +97,8 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
     /// </summary>
     private static bool IsBookInStock(string bookId)
     {
-        return true;
-        // Use book ID hash to seed pseudo-random decision (50/50 chance of success)
-        // var hash = bookId.GetHashCode();
-        // return (Math.Abs(hash) % 2) == 0;
+        var hash = bookId.GetHashCode();
+        return (Math.Abs(hash) % 2) == 0;
     }
 }
 

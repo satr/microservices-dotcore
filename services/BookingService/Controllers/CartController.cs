@@ -1,7 +1,7 @@
 using BookingService.Contracts;
+using BookingService.Messaging;
 using BookingService.Repositories;
 using Library.Contracts.Messages;
-using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookingService.Controllers;
@@ -11,9 +11,9 @@ namespace BookingService.Controllers;
 public sealed class CartController : ControllerBase
 {
     private readonly ICartRepository _carts;
-    private readonly IPublishEndpoint _publish;
+    private readonly ICartCommandPublisher _publish;
 
-    public CartController(ICartRepository carts, IPublishEndpoint publish)
+    public CartController(ICartRepository carts, ICartCommandPublisher publish)
     {
         _carts = carts;
         _publish = publish;
@@ -28,7 +28,7 @@ public sealed class CartController : ControllerBase
     [HttpPost("items")]
     public async Task<IActionResult> Add([FromBody] AddCartItemRequest request)
     {
-        await _publish.Publish(new AddToCartRequested(
+        await _publish.PublishAddToCartRequested(new AddToCartRequested(
             Guid.NewGuid(),
             request.UserId,
             request.BookId,
@@ -42,7 +42,7 @@ public sealed class CartController : ControllerBase
     [HttpDelete("items/{bookId}")]
     public async Task<IActionResult> Remove(string bookId, [FromQuery] string userId)
     {
-        await _publish.Publish(new RemoveFromCartRequested(
+        await _publish.PublishRemoveFromCartRequested(new RemoveFromCartRequested(
             Guid.NewGuid(),
             userId,
             bookId,
@@ -54,7 +54,7 @@ public sealed class CartController : ControllerBase
     [HttpPost("complete")]
     public async Task<IActionResult> Complete([FromQuery] string userId)
     {
-        await _publish.Publish(new CompleteBorrowingRequested(
+        await _publish.PublishCompleteBorrowingRequested(new CompleteBorrowingRequested(
             Guid.NewGuid(),
             userId,
             DateTime.UtcNow));
