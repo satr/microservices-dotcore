@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
 COMPOSE = docker compose
+COMPOSE_KAFKA = docker compose -f docker-compose.yml -f docker-compose.kafka.yml
 
 ##@ General
 
@@ -79,6 +80,22 @@ logs-frontend: ## Tail frontend logs
 .PHONY: ps
 ps: ## Show running containers
 	$(COMPOSE) ps
+
+.PHONY: kafka-up
+kafka-up: ## Start Kafka + Kafka UI (Stage 3 scaffold)
+	$(COMPOSE_KAFKA) up -d kafka kafka-ui
+
+.PHONY: kafka-down
+kafka-down: ## Stop Kafka + Kafka UI and remove their containers
+	$(COMPOSE_KAFKA) rm -sf kafka kafka-ui
+
+.PHONY: kafka-logs
+kafka-logs: ## Tail Kafka + Kafka UI logs
+	$(COMPOSE_KAFKA) logs -f kafka kafka-ui
+
+.PHONY: kafka-ps
+kafka-ps: ## Show Kafka + Kafka UI container status
+	$(COMPOSE_KAFKA) ps kafka kafka-ui
 
 .PHONY: clean
 clean: ## Stop containers and remove volumes
