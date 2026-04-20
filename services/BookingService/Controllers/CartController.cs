@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using BookingService.Contracts;
 using BookingService.Messaging;
 using BookingService.Repositories;
@@ -7,7 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace BookingService.Controllers;
 
 [ApiController]
-[Route("api/cart")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/cart")]
 public sealed class CartController : ControllerBase
 {
     private readonly ICartRepository _carts;

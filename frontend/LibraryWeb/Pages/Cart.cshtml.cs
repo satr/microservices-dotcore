@@ -38,7 +38,7 @@ public class CartModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
-        await client.DeleteAsync($"{bookingBase}/api/cart/items/{Uri.EscapeDataString(bookId)}?userId={Uri.EscapeDataString(userId)}");
+        await client.DeleteAsync($"{bookingBase}/api/v1/cart/items/{Uri.EscapeDataString(bookId)}?userId={Uri.EscapeDataString(userId)}");
 
         await LoadCartAsync();
         return Page();
@@ -54,7 +54,7 @@ public class CartModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
-        await client.DeleteAsync($"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
+        await client.DeleteAsync($"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
 
         await LoadCartAsync();
         return Page();
@@ -70,7 +70,7 @@ public class CartModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
-        await client.PostAsync($"{bookingBase}/api/cart/complete?userId={Uri.EscapeDataString(userId)}", null);
+        await client.PostAsync($"{bookingBase}/api/v1/cart/complete?userId={Uri.EscapeDataString(userId)}", null);
 
         Message = "Borrowing completed!";
         await Task.Delay(800); // brief pause for saga processing
@@ -91,14 +91,13 @@ public class CartModel : PageModel
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
         Items = await client.GetFromJsonAsync<List<CartItemDto>>(
-                    $"{bookingBase}/api/cart/{Uri.EscapeDataString(userId)}")
+                    $"{bookingBase}/api/v1/cart/{Uri.EscapeDataString(userId)}")
                 ?? [];
 
         Failures = await client.GetFromJsonAsync<List<CartFailureDto>>(
-                       $"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}")
+                       $"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}")
                    ?? [];
     }
 
     public sealed record CartItemDto(string BookId, string Title, string Author);
 }
-

@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+option csharp_namespace = "Library.Contracts.Proto";
+
+package library;
+
+// ---------------------------------------------------------------------------
+// Commands  (produced by booking-service, consumed by workflow-saga)
+// ---------------------------------------------------------------------------
+
+message AddToCartRequested {
+  string correlation_id      = 1;  // UUID string
+  string user_id             = 2;
+  string book_id             = 3;
+  string title               = 4;
+  string author              = 5;
+  string requested_at_utc    = 6;  // ISO-8601 string
+}
+
+message RemoveFromCartRequested {
+  string correlation_id      = 1;
+  string user_id             = 2;
+  string book_id             = 3;
+  string requested_at_utc    = 4;
+}
+
+message CompleteBorrowingRequested {
+  string correlation_id      = 1;
+  string user_id             = 2;
+  string requested_at_utc    = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Events  (produced by workflow-saga, consumed by booking-service)
+// ---------------------------------------------------------------------------
+
+message CartItemAdded {
+  string correlation_id = 1;
+  string user_id        = 2;
+  string book_id        = 3;
+  string title          = 4;
+  string author         = 5;
+}
+
+message CartItemRemoved {
+  string correlation_id = 1;
+  string user_id        = 2;
+  string book_id        = 3;
+}
+
+message BorrowingCompleted {
+  string correlation_id = 1;
+  string user_id        = 2;
+}
+
+message AddToCartFailed {
+  string correlation_id = 1;
+  string user_id        = 2;
+  string book_id        = 3;
+  string reason         = 4;
+}
+
+message BookStockRestored {
+  string correlation_id  = 1;
+  string book_id         = 2;
+  int32  quantity_restored = 3;
+}
+

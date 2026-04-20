@@ -82,8 +82,8 @@ ps: ## Show running containers
 	$(COMPOSE) ps
 
 .PHONY: kafka-up
-kafka-up: ## Start Kafka + Kafka UI (Stage 3 scaffold)
-	$(COMPOSE_KAFKA) up -d kafka kafka-ui
+kafka-up: ## Start Kafka + Schema Registry + Kafka UI (Stage 3/4 scaffold, no service rebuild)
+	$(COMPOSE_KAFKA) up -d kafka schema-registry kafka-ui
 
 .PHONY: kafka-stack-up
 kafka-stack-up: ## Start full stack with Kafka transport (booking-service + workflow-saga use Kafka)
@@ -94,17 +94,35 @@ kafka-stack-restart: ## Rebuild and restart booking-service + workflow-saga in K
 	$(COMPOSE_KAFKA) build booking-service workflow-saga
 	$(COMPOSE_KAFKA) up -d --no-deps booking-service workflow-saga
 
+.PHONY: kafka-schema-up
+kafka-schema-up: ## Start Kafka + Schema Registry + Kafka UI (Stage 4)
+	$(COMPOSE_KAFKA) up -d kafka schema-registry kafka-ui
+
+.PHONY: schema-check
+schema-check: ## List registered subjects in Schema Registry and show compatibility settings
+	@echo "=== Registered subjects ==="
+	@curl -sf http://localhost:8082/subjects | python3 -m json.tool || echo "(no subjects registered yet)"
+	@echo ""
+	@echo "=== Global compatibility ==="
+	@curl -sf http://localhost:8082/config | python3 -m json.tool || true
+
+.PHONY: schema-set-full-transitive
+schema-set-full-transitive: ## Enforce FULL_TRANSITIVE compatibility on Schema Registry (breaking changes blocked)
+	curl -X PUT http://localhost:8082/config \
+	  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+	  -d '{"compatibility":"FULL_TRANSITIVE"}'
+
 .PHONY: kafka-down
 kafka-down: ## Stop Kafka + Kafka UI and remove their containers
-	$(COMPOSE_KAFKA) rm -sf kafka kafka-ui
+	$(COMPOSE_KAFKA) rm -sf kafka kafka-ui schema-registry
 
 .PHONY: kafka-logs
-kafka-logs: ## Tail Kafka + Kafka UI logs
-	$(COMPOSE_KAFKA) logs -f kafka kafka-ui
+kafka-logs: ## Tail Kafka + Schema Registry + Kafka UI logs
+	$(COMPOSE_KAFKA) logs -f kafka schema-registry kafka-ui
 
 .PHONY: kafka-ps
-kafka-ps: ## Show Kafka + Kafka UI container status
-	$(COMPOSE_KAFKA) ps kafka kafka-ui
+kafka-ps: ## Show Kafka + Schema Registry + Kafka UI container status
+	$(COMPOSE_KAFKA) ps kafka schema-registry kafka-ui
 
 .PHONY: clean
 clean: ## Stop containers and remove volumes

@@ -43,67 +43,67 @@ Draft architecture and delivery plan: bootstrap a polyglot monorepo around the e
 
 ---
 
-### Stage 4: Production Readiness
-
+### Stage 4: API and schema versioning
+#### Learning Focus
+- **API versioning** teaches backward compatibility discipline — essential when multiple clients consume the same API at different cadences.
+- **API versioning** teaches backward compatibility discipline — essential when multiple clients consume the same API at different cadences.
 #### 4.1 API Versioning
 1. Introduce URL-segment versioning (`/api/v1/`, `/api/v2/`) in `books-service`, `users-service`, and `booking-service` using `Asp.Versioning.Http` (`Microsoft.AspNetCore.Mvc.Versioning`).
 2. Annotate controllers with `[ApiVersion]` and expose version metadata in Swagger/OpenAPI (`Asp.Versioning.ApiExplorer`).
 3. Add a deprecation policy: deprecated versions return `Sunset` and `Deprecation` response headers so clients have a migration timeline.
 4. Version the Kafka message contracts alongside the HTTP API — use an envelope wrapper `{ schemaVersion, payload }` in `Library.Contracts` so consumers can detect and handle version mismatches at runtime.
-
 #### 4.2 Protobuf / Schema Registry
 1. Replace JSON serialization on Kafka topics with **Protocol Buffers** (`Google.Protobuf`) — define `.proto` files for all message types in `shared/Library.Contracts/Proto/`.
 2. Register schemas in a **Confluent Schema Registry** container (add to `docker-compose.kafka.yml`) and configure MassTransit Kafka Rider to use `ISchemaRegistryClient` for schema-aware serialization.
 3. Enforce schema compatibility mode (`FULL_TRANSITIVE`) on the registry so breaking changes are caught before deployment.
 4. Add a `make schema-check` target that runs `kafka-schema-registry-maven-plugin` (or equivalent CLI) to diff local `.proto` files against the registry.
 
-#### 4.3 Authentication and Authorization
+### Stage 5: Security - Authentication and Authorization
+#### Learning Focus
+- **JWT + YARP gateway** teaches the security perimeter pattern — one trust boundary, token propagation, and policy enforcement in one place.
 1. Add an **Identity / OAuth2 server** container (Keycloak or `duende/identityserver`) to `docker-compose.yml`.
 2. Protect all service APIs with JWT bearer validation — add `AddAuthentication().AddJwtBearer(...)` and `[Authorize]` to controllers.
 3. Implement role-based policies: `librarian` role can manage books/stock; `member` role can browse and borrow.
 4. Propagate the JWT access token from the frontend through service-to-service calls and into Kafka message headers for audit trail.
 
-#### 4.4 API Gateway
+### Stage 6: API Gateway and Kubernetes Deployment
+#### Learning Focus
+- **Kubernetes** teaches immutable infrastructure and operational runbooks — how the stack behaves when pods restart, scale, or get evicted.
+- **CI/CD** ties everything together — no manual steps between a merged PR and a running deployment.
+#### 6.1 API Gateway
 1. Add a **YARP reverse proxy** service (`Microsoft.ReverseProxy`) as the single ingress point in front of `books-service`, `users-service`, and `booking-service`.
 2. Configure route transforms, rate limiting (`System.Threading.RateLimiting`), and request correlation-ID injection at the gateway level.
 3. Expose one OpenAPI aggregate spec from the gateway so the frontend and external consumers have a single discovery endpoint.
 
-#### 4.5 Structured Logging and Centralized Log Aggregation
+#### 6.2 Structured Logging and Centralized Log Aggregation
 1. Replace plain console logging with **Serilog** (`Serilog.AspNetCore`) across all services — output structured JSON to stdout.
 2. Add an **OpenSearch** (or Loki + Grafana) container and configure a Serilog sink to ship logs to it.
 3. Inject `TraceId`, `SpanId`, `UserId`, and `CorrelationId` as log properties automatically via middleware so every log entry is linkable to a Jaeger trace.
 4. Add a `make logs-search` target and document log query recipes (e.g., find all events for a given `CorrelationId`).
 
-#### 4.6 Health Checks and Readiness Probes
+#### 6.3 Health Checks and Readiness Probes
 1. Add `AddHealthChecks()` in each service with checks for PostgreSQL, RabbitMQ/Kafka, and upstream HTTP dependencies.
 2. Expose `/health/live` (liveness) and `/health/ready` (readiness) endpoints.
 3. Wire readiness probes into `docker-compose.yml` `healthcheck` directives so dependent services wait for dependencies to be ready before starting.
 4. Add a `make health` target that polls all `/health/ready` endpoints and summarises the stack status.
 
-#### 4.7 Kubernetes Deployment (Local with kind / minikube)
+#### 6.4 Kubernetes Deployment (Local with kind / minikube)
 1. Add `k8s/` folder with Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets) for each service.
 2. Use **Kustomize** overlays for `dev` vs `prod` environments (resource limits, replica counts, image tags).
 3. Add a `make k8s-up` / `make k8s-down` target using `kind` to spin up a local cluster and apply manifests.
 4. Move secrets (DB passwords, JWT signing key) to Kubernetes Secrets and demonstrate mounting them as env vars — no secrets in `appsettings.json`.
 
-#### 4.8 CI/CD Pipeline
+#### 6.5 CI/CD Pipeline
 1. Add a **GitHub Actions** workflow (`.github/workflows/ci.yml`) that:
    - Restores, builds, and runs tests on every PR.
    - Builds and pushes Docker images to GitHub Container Registry (`ghcr.io`) on merge to `main`.
    - Runs schema compatibility check against the Schema Registry.
 2. Add a **release workflow** that tags images with SemVer and updates the `k8s/` image tags automatically.
 
-#### 4.9 Contract and Integration Tests
+### Stage 7: Testing and Hardening - Contract and Integration Tests
 1. Add an `tests/` folder with:
    - **xUnit** integration tests for each HTTP API using `WebApplicationFactory<Program>` with a real PostgreSQL container (`Testcontainers.PostgreSql`).
    - **MassTransit test harness** unit tests for saga state machine transitions.
    - **Pact** consumer-driven contract tests between frontend and `booking-service`.
 2. Add Kafka consumer group tests using `Testcontainers.Kafka` to verify end-to-end message flow at the transport layer.
-
-#### Stage 4 Learning Focus
-- **API versioning** teaches backward compatibility discipline — essential when multiple clients consume the same API at different cadences.
-- **Protobuf + Schema Registry** teaches binary contract safety and schema evolution — key skills for Kafka-heavy production systems.
-- **JWT + YARP gateway** teaches the security perimeter pattern — one trust boundary, token propagation, and policy enforcement in one place.
-- **Kubernetes** teaches immutable infrastructure and operational runbooks — how the stack behaves when pods restart, scale, or get evicted.
-- **CI/CD** ties everything together — no manual steps between a merged PR and a running deployment.
 

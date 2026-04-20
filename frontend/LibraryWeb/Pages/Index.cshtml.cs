@@ -65,7 +65,7 @@ public class IndexModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var usersBase = _configuration["ServiceEndpoints:Users"] ?? "http://localhost:5001";
-        var response = await client.GetAsync($"{usersBase}/api/users/by-name/{Uri.EscapeDataString(UserName)}");
+        var response = await client.GetAsync($"{usersBase}/api/v1/users/by-name/{Uri.EscapeDataString(UserName)}");
 
         if (!response.IsSuccessStatusCode)
         {
@@ -102,7 +102,7 @@ public class IndexModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
-        await client.DeleteAsync($"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
+        await client.DeleteAsync($"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
 
         await LoadFailuresAsync();
         return Page();
@@ -119,7 +119,7 @@ public class IndexModel : PageModel
         var client = _httpClientFactory.CreateClient();
         var booksBase = _configuration["ServiceEndpoints:Books"] ?? "http://localhost:5002";
         Books = await client.GetFromJsonAsync<List<BookDto>>(
-                    $"{booksBase}/api/books/search?query={Uri.EscapeDataString(SearchQuery)}")
+                    $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
                 ?? [];
 
         await LoadFailuresAsync();
@@ -142,7 +142,7 @@ public class IndexModel : PageModel
         try
         {
             var result = await _retryPolicy.ExecuteAsync(async () =>
-                await client.PostAsJsonAsync($"{bookingBase}/api/cart/items", 
+                await client.PostAsJsonAsync($"{bookingBase}/api/v1/cart/items", 
                     new AddCartItemRequest(userId, bookId, title, author))
             );
             
@@ -168,7 +168,7 @@ public class IndexModel : PageModel
         {
             var booksBase = _configuration["ServiceEndpoints:Books"] ?? "http://localhost:5002";
             Books = await client.GetFromJsonAsync<List<BookDto>>(
-                        $"{booksBase}/api/books/search?query={Uri.EscapeDataString(SearchQuery)}")
+                        $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
                     ?? [];
         }
 
@@ -189,7 +189,7 @@ public class IndexModel : PageModel
         var client = _httpClientFactory.CreateClient();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
         Failures = await client.GetFromJsonAsync<List<CartFailureDto>>(
-                       $"{bookingBase}/api/cart/failures/{Uri.EscapeDataString(userId)}")
+                       $"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}")
                    ?? [];
     }
 
@@ -199,4 +199,3 @@ public class IndexModel : PageModel
 
     public sealed record AddCartItemRequest(string UserId, string BookId, string Title, string Author);
 }
-

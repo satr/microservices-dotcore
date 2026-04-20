@@ -2,6 +2,31 @@
 
 namespace Library.Contracts.Messages;
 
+// ---------------------------------------------------------------------------
+// Message envelope — carries schema version alongside any payload.
+// Consumers check SchemaVersion before deserialising Payload so they can
+// handle or reject unknown versions gracefully without crashing.
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Transport-level envelope that wraps a message payload with schema metadata.
+/// Use this when publishing to Kafka topics so downstream consumers can detect
+/// and handle version mismatches.
+/// </summary>
+/// <param name="SchemaVersion">Monotonically increasing integer. Increment on breaking changes.</param>
+/// <param name="MessageType">Message type name, e.g. "AddToCartRequested".</param>
+/// <param name="Payload">The actual message payload.</param>
+public sealed record MessageEnvelope<T>(
+    int SchemaVersion,
+    string MessageType,
+    T Payload)
+{
+    /// <summary>Wrap a payload at version 1 (initial schema).</summary>
+    public static MessageEnvelope<T> V1(T payload) =>
+        new(1, typeof(T).Name, payload);
+}
+
+
 public sealed record AddToCartRequested(
     Guid CorrelationId,
     string UserId,

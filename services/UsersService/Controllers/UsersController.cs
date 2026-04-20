@@ -1,10 +1,12 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using UsersService.Repositories;
 
 namespace UsersService.Controllers;
 
 [ApiController]
-[Route("api/users")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/users")]
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserRepository _users;

@@ -1,10 +1,12 @@
+using Asp.Versioning;
 using BooksService.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BooksService.Controllers;
 
 [ApiController]
-[Route("api/books")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/books")]
 public sealed class BooksController : ControllerBase
 {
     private readonly IBookRepository _books;
