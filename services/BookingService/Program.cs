@@ -54,7 +54,6 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<CartItemRemovedConsumer>();
     x.AddConsumer<BorrowingCompletedConsumer>();
     x.AddConsumer<AddToCartFailedConsumer>();
-    x.AddConsumer<CartItemRemovalConfirmedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {

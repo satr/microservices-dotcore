@@ -44,11 +44,6 @@ public sealed record AddToCartFailed(
     string BookId,
     string Reason);
 
-public sealed record CartItemRemovalConfirmed(
-    Guid CorrelationId,
-    string UserId,
-    string BookId);
-
 public sealed record BookStockRestored(
     Guid CorrelationId,
     string BookId,

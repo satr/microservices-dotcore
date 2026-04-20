@@ -57,7 +57,7 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                     ctx.Saga.UserId = ctx.Message.UserId;
                     ctx.Saga.BookId = ctx.Message.BookId;
                 })
-                .Publish(ctx => new CartItemRemovalConfirmed(
+                .Publish(ctx => new CartItemRemoved(
                     ctx.Saga.CorrelationId,
                     ctx.Message.UserId,
                     ctx.Message.BookId))
@@ -81,9 +81,10 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
     /// </summary>
     private static bool IsBookInStock(string bookId)
     {
+        return true;
         // Use book ID hash to seed pseudo-random decision (50/50 chance of success)
-        var hash = bookId.GetHashCode();
-        return (Math.Abs(hash) % 2) == 0;
+        // var hash = bookId.GetHashCode();
+        // return (Math.Abs(hash) % 2) == 0;
     }
 }
 
