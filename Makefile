@@ -85,6 +85,15 @@ ps: ## Show running containers
 kafka-up: ## Start Kafka + Kafka UI (Stage 3 scaffold)
 	$(COMPOSE_KAFKA) up -d kafka kafka-ui
 
+.PHONY: kafka-stack-up
+kafka-stack-up: ## Start full stack with Kafka transport (booking-service + workflow-saga use Kafka)
+	$(COMPOSE_KAFKA) up -d --build
+
+.PHONY: kafka-stack-restart
+kafka-stack-restart: ## Rebuild and restart booking-service + workflow-saga in Kafka mode
+	$(COMPOSE_KAFKA) build booking-service workflow-saga
+	$(COMPOSE_KAFKA) up -d --no-deps booking-service workflow-saga
+
 .PHONY: kafka-down
 kafka-down: ## Stop Kafka + Kafka UI and remove their containers
 	$(COMPOSE_KAFKA) rm -sf kafka kafka-ui
