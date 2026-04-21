@@ -53,8 +53,6 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddDbContext<BookingDbContext>(opt =>
         opt.UseNpgsql(connectionString));
-    builder.Services.AddDbContext<BookingInventoryDbContext>(opt =>
-        opt.UseNpgsql(connectionString));
     builder.Services.AddSingleton<ICartRepository, PostgresCartRepository>();
 }
 else
@@ -147,9 +145,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
-    var inventoryDb = scope.ServiceProvider.GetRequiredService<BookingInventoryDbContext>();
     db.Database.Migrate();
-    inventoryDb.Database.Migrate();
 }
 
 if (app.Environment.IsDevelopment())

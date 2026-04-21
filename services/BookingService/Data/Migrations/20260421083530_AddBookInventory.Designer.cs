@@ -3,6 +3,7 @@ using System;
 using BookingService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BookingService.Data.Migrations
 {
     [DbContext(typeof(BookingDbContext))]
-    partial class BookingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260421083530_AddBookInventory")]
+    partial class AddBookInventory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -28,6 +31,9 @@ namespace BookingService.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<DateTime>("LastUpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Stock")
                         .HasColumnType("integer");
 
@@ -39,16 +45,19 @@ namespace BookingService.Data.Migrations
                         new
                         {
                             BookId = "b1",
+                            LastUpdatedUtc = new DateTime(2026, 4, 21, 8, 35, 30, 247, DateTimeKind.Utc).AddTicks(8350),
                             Stock = 10
                         },
                         new
                         {
                             BookId = "b2",
+                            LastUpdatedUtc = new DateTime(2026, 4, 21, 8, 35, 30, 247, DateTimeKind.Utc).AddTicks(8550),
                             Stock = 10
                         },
                         new
                         {
                             BookId = "b3",
+                            LastUpdatedUtc = new DateTime(2026, 4, 21, 8, 35, 30, 247, DateTimeKind.Utc).AddTicks(8550),
                             Stock = 10
                         });
                 });

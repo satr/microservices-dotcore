@@ -91,15 +91,15 @@ Relevant files:
 
 ### 5) Kafka topic conventions
 
-| Convention | Value |
-|---|---|
-| Topic prefix | `library` |
-| Topic name format | `library.<message-name-kebab>` |
-| Partitions | 3 |
-| Replication factor | 1 (single-node dev) |
-| Consumer group — booking-service | `booking-service` |
-| Consumer group — workflow-saga | `workflow-saga` |
-| Offset reset | `Earliest` |
+| Convention | Value                                  |
+|---|----------------------------------------|
+| Topic prefix | `library`                              |
+| Topic name format | `library.<message-name-in-kebab-case>` |
+| Partitions | 3                                      |
+| Replication factor | 1 (single-node dev)                    |
+| Consumer group — booking-service | `booking-service`                      |
+| Consumer group — workflow-saga | `workflow-saga`                        |
+| Offset reset | `Earliest`                             |
 
 ---
 

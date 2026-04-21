@@ -38,7 +38,7 @@ public sealed class BookInventoryService : IBookInventoryService
         }
 
         using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BookingInventoryDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
         
         var inventory = await db.BookInventories.FindAsync(bookId);
         if (inventory == null || inventory.Stock <= 0)
@@ -60,7 +60,7 @@ public sealed class BookInventoryService : IBookInventoryService
     public async Task<bool> DeductStockAsync(string bookId)
     {
         using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BookingInventoryDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
         
         var inventory = await db.BookInventories.FindAsync(bookId);
         if (inventory == null || inventory.Stock <= 0)
@@ -69,7 +69,6 @@ public sealed class BookInventoryService : IBookInventoryService
         }
 
         inventory.Stock--;
-        inventory.LastUpdatedUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return true;
     }
@@ -77,7 +76,7 @@ public sealed class BookInventoryService : IBookInventoryService
     public async Task<int> GetStockAsync(string bookId)
     {
         using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<BookingInventoryDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
         
         var inventory = await db.BookInventories.FindAsync(bookId);
         return inventory?.Stock ?? 0;

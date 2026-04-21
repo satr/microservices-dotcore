@@ -7,10 +7,12 @@ namespace BookingService.Consumers;
 
 public sealed class CartItemAddedConsumer : IConsumer<CartItemAdded>
 {
+    private readonly ILogger<CartItemAddedConsumer> _logger;
     private readonly ICartRepository _carts;
 
-    public CartItemAddedConsumer(ICartRepository carts)
+    public CartItemAddedConsumer(ILogger<CartItemAddedConsumer> logger, ICartRepository carts)
     {
+        _logger = logger;
         _carts = carts;
     }
 
@@ -18,6 +20,7 @@ public sealed class CartItemAddedConsumer : IConsumer<CartItemAdded>
     {
         var message = context.Message;
         _carts.Add(message.UserId, new CartItem(message.BookId, message.Title, message.Author));
+        _logger.LogInformation($"Cart item added for user {context.Message.UserId}, book {context.Message.BookId}");
         return Task.CompletedTask;
     }
 }
