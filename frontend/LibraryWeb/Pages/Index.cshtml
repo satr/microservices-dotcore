@@ -49,13 +49,25 @@ else
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
                     <strong>@book.Title</strong> - @book.Author
+                    @if (book.Stock < 0)
+                    {
+                        <span class="badge bg-secondary ms-2">Stock unknown</span>
+                    }
+                    else if (book.Stock == 0)
+                    {
+                        <span class="badge bg-danger ms-2">Out of stock</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success ms-2">@book.Stock available</span>
+                    }
                 </div>
                 <form method="post" asp-page-handler="AddToCart" class="d-inline">
                     <input type="hidden" name="bookId" value="@book.Id" />
                     <input type="hidden" name="title" value="@book.Title" />
                     <input type="hidden" name="author" value="@book.Author" />
                     <input type="hidden" asp-for="SearchQuery" />
-                    <button type="submit" class="btn btn-success btn-sm">Add to Cart</button>
+                    <button type="submit" class="btn btn-success btn-sm" @(book.Stock == 0 ? "disabled" : "")>Add to Cart</button>
                 </form>
             </li>
         }

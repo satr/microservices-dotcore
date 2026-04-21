@@ -52,9 +52,15 @@ public sealed class BookInventoryService : IBookInventoryService
 
     public async Task ReleaseBookAsync(string bookId)
     {
-        // Stock is released when item is removed from cart
-        // In a real system, this would involve tracking reserved quantities
-        await Task.CompletedTask;
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+
+        var inventory = await db.BookInventories.FindAsync(bookId);
+        if (inventory != null)
+        {
+            inventory.Stock++;
+            await db.SaveChangesAsync();
+        }
     }
 
     public async Task<bool> DeductStockAsync(string bookId)

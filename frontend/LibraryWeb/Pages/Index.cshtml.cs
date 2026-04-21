@@ -118,9 +118,11 @@ public class IndexModel : PageModel
 
         var client = _httpClientFactory.CreateClient();
         var booksBase = _configuration["ServiceEndpoints:Books"] ?? "http://localhost:5002";
-        Books = await client.GetFromJsonAsync<List<BookDto>>(
-                    $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
-                ?? [];
+        var books = await client.GetFromJsonAsync<List<BookDtoRaw>>(
+                        $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
+                    ?? [];
+
+        Books = await EnrichWithStockAsync(client, books);
 
         await LoadFailuresAsync();
 
@@ -167,14 +169,34 @@ public class IndexModel : PageModel
         if (!string.IsNullOrWhiteSpace(SearchQuery))
         {
             var booksBase = _configuration["ServiceEndpoints:Books"] ?? "http://localhost:5002";
-            Books = await client.GetFromJsonAsync<List<BookDto>>(
-                        $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
-                    ?? [];
+            var raw = await client.GetFromJsonAsync<List<BookDtoRaw>>(
+                          $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
+                      ?? [];
+            Books = await EnrichWithStockAsync(client, raw);
         }
 
         await LoadFailuresAsync();
 
         return Page();
+    }
+
+    private async Task<List<BookDto>> EnrichWithStockAsync(HttpClient client, List<BookDtoRaw> books)
+    {
+        if (books.Count == 0) return [];
+        var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
+        var ids = books.Select(b => b.Id).ToList();
+        Dictionary<string, int>? stockMap = null;
+        try
+        {
+            stockMap = await client.PostAsJsonAsync($"{bookingBase}/api/v1/inventory/stock/batch", ids)
+                           .ContinueWith(t => t.Result.Content.ReadFromJsonAsync<Dictionary<string, int>>())
+                           .Unwrap();
+        }
+        catch
+        {
+            // stock unavailable — show -1 as unknown
+        }
+        return books.Select(b => new BookDto(b.Id, b.Title, b.Author, stockMap?.GetValueOrDefault(b.Id, -1) ?? -1)).ToList();
     }
 
     private async Task LoadFailuresAsync()
@@ -195,7 +217,9 @@ public class IndexModel : PageModel
 
     public sealed record UserDto(string Id, string UserName);
 
-    public sealed record BookDto(string Id, string Title, string Author);
+    public sealed record BookDtoRaw(string Id, string Title, string Author);
+
+    public sealed record BookDto(string Id, string Title, string Author, int Stock);
 
     public sealed record AddCartItemRequest(string UserId, string BookId, string Title, string Author);
 }

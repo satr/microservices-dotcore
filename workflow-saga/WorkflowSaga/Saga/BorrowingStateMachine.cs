@@ -30,34 +30,18 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
                     ctx.Saga.Title = ctx.Message.Title;
                     ctx.Saga.Author = ctx.Message.Author;
                 })
-                .IfElse(
-                    ctx => IsBookInStock(ctx.Message.BookId),
-                    ifTrue => ifTrue
-                        .ThenAsync(async ctx =>
-                        {
-                            var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
-                            await publisher.PublishCartItemAdded(new CartItemAdded(
-                                ctx.Saga.CorrelationId,
-                                ctx.Saga.UserId,
-                                ctx.Saga.BookId!,
-                                ctx.Saga.Title!,
-                                ctx.Saga.Author!));
-                        })
-                        .TransitionTo(Requested)
-                        .Finalize(),
-                    ifFalse => ifFalse
-                        .ThenAsync(async ctx =>
-                        {
-                            var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
-                            await publisher.PublishAddToCartFailed(new AddToCartFailed(
-                                ctx.Saga.CorrelationId,
-                                ctx.Saga.UserId,
-                                ctx.Saga.BookId!,
-                                "Book is currently out of stock or inventory service unavailable"));
-                        })
-                        .TransitionTo(Failed)
-                        .Finalize()
-                ),
+                .ThenAsync(async ctx =>
+                {
+                    var publisher = ctx.GetServiceOrCreateInstance<IBorrowingEventPublisher>();
+                    await publisher.PublishCartItemAdded(new CartItemAdded(
+                        ctx.Saga.CorrelationId,
+                        ctx.Saga.UserId,
+                        ctx.Saga.BookId!,
+                        ctx.Saga.Title!,
+                        ctx.Saga.Author!));
+                })
+                .TransitionTo(Requested)
+                .Finalize(),
 
             When(RemoveFromCartRequestedEvent)
                 .Then(ctx =>
@@ -90,17 +74,4 @@ public sealed class BorrowingStateMachine : MassTransitStateMachine<BorrowingSta
 
         SetCompletedWhenFinalized();
     }
-
-    /// <summary>
-    /// Simulate stock check with 50% random failure rate using book ID hash.
-    /// This demonstrates the inventory service's unreliability pattern.
-    /// </summary>
-    private static bool IsBookInStock(string bookId)
-    {
-        var hash = bookId.GetHashCode();
-        return (Math.Abs(hash) % 2) == 0;
-    }
 }
-
-
-

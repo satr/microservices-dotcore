@@ -67,7 +67,9 @@ public sealed record AddToCartFailed(
     Guid CorrelationId,
     string UserId,
     string BookId,
-    string Reason);
+    string Reason,
+    string Title = "",
+    string Author = "");
 
 public sealed record BookStockRestored(
     Guid CorrelationId,

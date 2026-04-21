@@ -25,11 +25,10 @@ public sealed class AddToCartFailedConsumer : IConsumer<AddToCartFailed>
         _cartRepository.RecordFailure(
             context.Message.UserId,
             context.Message.BookId,
-            string.Empty,  // Title not available in failure message
-            string.Empty,  // Author not available in failure message
+            context.Message.Title,
+            context.Message.Author,
             context.Message.Reason);
         
         return Task.CompletedTask;
     }
 }
-
