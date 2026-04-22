@@ -5,11 +5,13 @@ using BookingService.Repositories;
 using BookingService.Services;
 using Library.Contracts.Messages;
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -61,6 +63,29 @@ else
 }
 
 builder.Services.AddSingleton<IBookInventoryService, BookInventoryService>();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = builder.Configuration["Keycloak:Authority"]
+                            ?? "http://localhost:8888/realms/library";
+        options.MetadataAddress = builder.Configuration["Keycloak:MetadataAddress"]
+                                  ?? "http://localhost:8888/realms/library/.well-known/openid-configuration";
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidIssuer   = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8888/realms/library",
+            RoleClaimType = "roles",
+            NameClaimType = "preferred_username"
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("MemberOrLibrarian", policy => policy.RequireRole("member", "librarian"));
+    options.AddPolicy("LibrarianOnly",     policy => policy.RequireRole("librarian"));
+});
 
 var messagingProvider = builder.Configuration["Messaging:Provider"] ?? "RabbitMq";
 
@@ -153,6 +178,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

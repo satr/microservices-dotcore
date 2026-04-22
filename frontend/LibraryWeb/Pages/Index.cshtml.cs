@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -22,7 +25,7 @@ public class IndexModel : PageModel
     {
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
-        
+
         _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
@@ -36,73 +39,67 @@ public class IndexModel : PageModel
     }
 
     [BindProperty]
-    public string UserName { get; set; } = string.Empty;
-
-    [BindProperty]
     public string SearchQuery { get; set; } = string.Empty;
 
     public string? Message { get; private set; }
 
+    // Identity comes from OIDC cookie — no manual session for authentication
+    public bool IsAuthenticated => User.Identity?.IsAuthenticated == true;
+    public string? CurrentUserName => User.FindFirst("preferred_username")?.Value
+                                      ?? User.Identity?.Name;
     public string? CurrentUserId => HttpContext.Session.GetString("userId");
-
-    public string? CurrentUserName => HttpContext.Session.GetString("userName");
+    public bool IsLibrarian => User.IsInRole("librarian");
 
     public List<BookDto> Books { get; private set; } = [];
     public List<CartFailureDto> Failures { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
-        await LoadFailuresAsync();
+        if (IsAuthenticated)
+        {
+            await EnsureUserIdInSessionAsync();
+            await LoadFailuresAsync();
+        }
     }
 
-    public async Task<IActionResult> OnPostLoginAsync()
+    /// After OIDC login the userId (from users-service) is resolved once and cached in session.
+    private async Task EnsureUserIdInSessionAsync()
     {
-        if (string.IsNullOrWhiteSpace(UserName))
-        {
-            Message = "Enter a user name.";
-            return Page();
-        }
+        if (HttpContext.Session.GetString("userId") != null) return;
 
-        var client = _httpClientFactory.CreateClient();
+        var userName = CurrentUserName;
+        if (string.IsNullOrWhiteSpace(userName)) return;
+
+        var client = await CreateAuthenticatedClientAsync();
         var usersBase = _configuration["ServiceEndpoints:Users"] ?? "http://localhost:5001";
-        var response = await client.GetAsync($"{usersBase}/api/v1/users/by-name/{Uri.EscapeDataString(UserName)}");
+        var response = await client.GetAsync(
+            $"{usersBase}/api/v1/users/by-name/{Uri.EscapeDataString(userName)}");
 
-        if (!response.IsSuccessStatusCode)
+        if (response.IsSuccessStatusCode)
         {
-            Message = "User not found. Try user1 or user2.";
-            return Page();
+            var user = await response.Content.ReadFromJsonAsync<UserDto>();
+            if (user != null)
+            {
+                HttpContext.Session.SetString("userId", user.Id);
+            }
         }
-
-        var user = await response.Content.ReadFromJsonAsync<UserDto>();
-        if (user is null)
-        {
-            Message = "User lookup failed.";
-            return Page();
-        }
-
-        HttpContext.Session.SetString("userId", user.Id);
-        HttpContext.Session.SetString("userName", user.UserName);
-
-        return RedirectToPage();
     }
 
     public IActionResult OnPostLogout()
     {
-        HttpContext.Session.Clear();
-        return RedirectToPage();
+        // Logout is handled by POST /logout endpoint in Program.cs (OIDC sign-out)
+        return RedirectToPage("/Index");
     }
 
     public async Task<IActionResult> OnPostDismissFailureAsync(string bookId)
     {
         var userId = CurrentUserId;
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return RedirectToPage();
-        }
+        if (string.IsNullOrWhiteSpace(userId)) return RedirectToPage();
 
-        var client = _httpClientFactory.CreateClient();
+        var client = await CreateAuthenticatedClientAsync();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
-        await client.DeleteAsync($"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
+        await client.DeleteAsync(
+            $"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}/{Uri.EscapeDataString(bookId)}");
 
         await LoadFailuresAsync();
         return Page();
@@ -116,16 +113,14 @@ public class IndexModel : PageModel
             return Page();
         }
 
-        var client = _httpClientFactory.CreateClient();
+        var client = await CreateAuthenticatedClientAsync();
         var booksBase = _configuration["ServiceEndpoints:Books"] ?? "http://localhost:5002";
-        var books = await client.GetFromJsonAsync<List<BookDtoRaw>>(
-                        $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
-                    ?? [];
+        var raw = await client.GetFromJsonAsync<List<BookDtoRaw>>(
+                      $"{booksBase}/api/v1/books/search?query={Uri.EscapeDataString(SearchQuery)}")
+                  ?? [];
 
-        Books = await EnrichWithStockAsync(client, books);
-
+        Books = await EnrichWithStockAsync(client, raw);
         await LoadFailuresAsync();
-
         return Page();
     }
 
@@ -138,28 +133,21 @@ public class IndexModel : PageModel
             return Page();
         }
 
-        var client = _httpClientFactory.CreateClient();
+        var client = await CreateAuthenticatedClientAsync();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
 
         try
         {
             var result = await _retryPolicy.ExecuteAsync(async () =>
-                await client.PostAsJsonAsync($"{bookingBase}/api/v1/cart/items", 
+                await client.PostAsJsonAsync($"{bookingBase}/api/v1/cart/items",
                     new AddCartItemRequest(userId, bookId, title, author))
             );
-            
-            if (result.IsSuccessStatusCode)
-            {
-                Message = "Added to cart.";
-            }
-            else if (result.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                Message = $"Unable to add book to cart - book may be out of stock.";
-            }
-            else
-            {
-                Message = "Could not add to cart. Please try again.";
-            }
+
+            Message = result.IsSuccessStatusCode
+                ? "Added to cart."
+                : result.StatusCode == System.Net.HttpStatusCode.BadRequest
+                    ? "Unable to add book to cart — book may be out of stock."
+                    : "Could not add to cart. Please try again.";
         }
         catch (HttpRequestException ex)
         {
@@ -176,8 +164,21 @@ public class IndexModel : PageModel
         }
 
         await LoadFailuresAsync();
-
         return Page();
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /// Creates an HttpClient with the OIDC access token in the Authorization header.
+    /// This propagates the JWT to downstream services for both authentication and audit.
+    private async Task<HttpClient> CreateAuthenticatedClientAsync()
+    {
+        var client = _httpClientFactory.CreateClient();
+        var token = await HttpContext.GetTokenAsync("access_token");
+        if (!string.IsNullOrEmpty(token))
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     private async Task<List<BookDto>> EnrichWithStockAsync(HttpClient client, List<BookDtoRaw> books)
@@ -188,27 +189,21 @@ public class IndexModel : PageModel
         Dictionary<string, int>? stockMap = null;
         try
         {
-            stockMap = await client.PostAsJsonAsync($"{bookingBase}/api/v1/inventory/stock/batch", ids)
-                           .ContinueWith(t => t.Result.Content.ReadFromJsonAsync<Dictionary<string, int>>())
-                           .Unwrap();
+            var resp = await client.PostAsJsonAsync($"{bookingBase}/api/v1/inventory/stock/batch", ids);
+            stockMap = await resp.Content.ReadFromJsonAsync<Dictionary<string, int>>();
         }
-        catch
-        {
-            // stock unavailable — show -1 as unknown
-        }
-        return books.Select(b => new BookDto(b.Id, b.Title, b.Author, stockMap?.GetValueOrDefault(b.Id, -1) ?? -1)).ToList();
+        catch { /* stock unavailable */ }
+
+        return books.Select(b => new BookDto(b.Id, b.Title, b.Author,
+            stockMap?.GetValueOrDefault(b.Id, -1) ?? -1)).ToList();
     }
 
     private async Task LoadFailuresAsync()
     {
         var userId = CurrentUserId;
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            Failures = [];
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(userId)) { Failures = []; return; }
 
-        var client = _httpClientFactory.CreateClient();
+        var client = await CreateAuthenticatedClientAsync();
         var bookingBase = _configuration["ServiceEndpoints:Booking"] ?? "http://localhost:5003";
         Failures = await client.GetFromJsonAsync<List<CartFailureDto>>(
                        $"{bookingBase}/api/v1/cart/failures/{Uri.EscapeDataString(userId)}")
@@ -216,9 +211,7 @@ public class IndexModel : PageModel
     }
 
     public sealed record UserDto(string Id, string UserName);
-
     public sealed record BookDtoRaw(string Id, string Title, string Author);
-
     public sealed record BookDto(string Id, string Title, string Author, int Stock);
 
     public sealed record AddCartItemRequest(string UserId, string BookId, string Title, string Author);

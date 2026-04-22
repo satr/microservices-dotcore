@@ -13,23 +13,31 @@
 
 <partial name="Shared/_CartFailures" model="Model.Failures" />
 
-@if (string.IsNullOrWhiteSpace(Model.CurrentUserId))
+@if (!Model.IsAuthenticated)
 {
-    <form method="post" asp-page-handler="Login" class="mb-4">
-        <label for="UserName" class="form-label">User name</label>
-        <input asp-for="UserName" class="form-control" />
-        <button type="submit" class="btn btn-primary mt-2">Login</button>
-        <div class="form-text">Try: user1 or user2</div>
-    </form>
+    <div class="mb-4">
+        <p class="text-muted">Sign in to search and borrow books.</p>
+        <a href="/login" class="btn btn-primary">Login with Keycloak</a>
+        <div class="form-text mt-1">Accounts: <strong>user1</strong> / user1 &nbsp;·&nbsp; <strong>user2</strong> / user2 &nbsp;·&nbsp; <strong>librarian1</strong> / librarian1</div>
+    </div>
 }
 else
 {
-    <div class="mb-3">
+    <div class="mb-3 d-flex align-items-center gap-2">
         Logged in as <strong>@Model.CurrentUserName</strong>
-        <form method="post" asp-page-handler="Logout" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-outline-secondary ms-2">Logout</button>
+        @if (Model.IsLibrarian)
+        {
+            <span class="badge bg-warning text-dark">librarian</span>
+        }
+        else
+        {
+            <span class="badge bg-primary">member</span>
+        }
+        <form method="post" action="/logout" class="d-inline">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Logout</button>
         </form>
-        <a asp-page="/Cart" class="btn btn-sm btn-outline-primary ms-2">Cart</a>
+        <a asp-page="/Cart" class="btn btn-sm btn-outline-primary">Cart</a>
     </div>
 }
 

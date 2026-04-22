@@ -75,6 +75,24 @@ logs-saga: ## Tail workflow-saga logs
 logs-frontend: ## Tail frontend logs
 	$(COMPOSE) logs -f frontend
 
+##@ Security
+
+.PHONY: keycloak-up
+keycloak-up: ## Start Keycloak only (for local dev without full docker stack)
+	$(COMPOSE) up -d keycloak
+
+.PHONY: keycloak-logs
+keycloak-logs: ## Tail Keycloak logs
+	$(COMPOSE) logs -f keycloak
+
+.PHONY: keycloak-status
+keycloak-status: ## Check Keycloak health and list realm users
+	@echo "=== Keycloak health ==="
+	@curl -sf http://localhost:8888/health/ready | python3 -m json.tool || echo "(not ready yet)"
+	@echo ""
+	@echo "=== Realm info ==="
+	@curl -sf http://localhost:8888/realms/library | python3 -m json.tool | grep -E '"realm"|"enabled"' || true
+
 ##@ Infrastructure
 
 .PHONY: ps

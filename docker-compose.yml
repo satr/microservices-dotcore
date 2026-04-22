@@ -1,5 +1,28 @@
 services:
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+      # Tokens carry iss=http://localhost:8888/realms/library (browser-reachable URL)
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8888
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./docker/keycloak-realm.json:/opt/keycloak/data/import/realm.json
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -54,11 +77,15 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=users_db;Username=library;Password=library
       - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
+      - Keycloak__Authority=http://localhost:8888/realms/library
+      - Keycloak__MetadataAddress=http://keycloak:8080/realms/library/.well-known/openid-configuration
     depends_on:
       postgres:
         condition: service_healthy
       jaeger:
         condition: service_started
+      keycloak:
+        condition: service_healthy
     ports:
       - "5001:8080"
 
@@ -71,11 +98,15 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=books_db;Username=library;Password=library
       - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
+      - Keycloak__Authority=http://localhost:8888/realms/library
+      - Keycloak__MetadataAddress=http://keycloak:8080/realms/library/.well-known/openid-configuration
     depends_on:
       postgres:
         condition: service_healthy
       jaeger:
         condition: service_started
+      keycloak:
+        condition: service_healthy
     ports:
       - "5002:8080"
 
@@ -91,6 +122,8 @@ services:
       - RabbitMq__Password=guest
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=booking_db;Username=library;Password=library
       - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
+      - Keycloak__Authority=http://localhost:8888/realms/library
+      - Keycloak__MetadataAddress=http://keycloak:8080/realms/library/.well-known/openid-configuration
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -98,6 +131,8 @@ services:
         condition: service_healthy
       jaeger:
         condition: service_started
+      keycloak:
+        condition: service_healthy
     ports:
       - "5003:8080"
 
@@ -129,11 +164,15 @@ services:
       - ServiceEndpoints__Books=http://books-service:8080
       - ServiceEndpoints__Booking=http://booking-service:8080
       - OpenTelemetry__OtlpEndpoint=http://jaeger:4317
+      # Browser uses localhost:8888; server-side OIDC discovery uses internal keycloak URL
+      - Keycloak__Authority=http://localhost:8888/realms/library
+      - Keycloak__MetadataAddress=http://keycloak:8080/realms/library/.well-known/openid-configuration
     depends_on:
       - users-service
       - books-service
       - booking-service
       - jaeger
+      - keycloak
     ports:
       - "8080:8080"
 

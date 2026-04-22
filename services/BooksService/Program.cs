@@ -1,10 +1,12 @@
 using BooksService.Data;
 using BooksService.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -27,6 +29,28 @@ builder.Services
         options.GroupNameFormat = "'v'VVV";
         options.SubstituteApiVersionInUrl = true;
     });
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Authority sets the ValidIssuer baseline; MetadataAddress overrides OIDC discovery URL
+        // so Docker-internal services can reach Keycloak by container name while tokens
+        // still carry iss=http://localhost:8888/realms/library (the browser-reachable address).
+        options.Authority = builder.Configuration["Keycloak:Authority"]
+                            ?? "http://localhost:8888/realms/library";
+        options.MetadataAddress = builder.Configuration["Keycloak:MetadataAddress"]
+                                  ?? "http://localhost:8888/realms/library/.well-known/openid-configuration";
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidIssuer   = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8888/realms/library",
+            RoleClaimType = "roles",
+            NameClaimType = "preferred_username"
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService("books-service"))
@@ -69,6 +93,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

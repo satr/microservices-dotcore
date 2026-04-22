@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UsersService.Repositories;
 
@@ -7,6 +8,7 @@ namespace UsersService.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/users")]
+[Authorize] // any authenticated user can look up users
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserRepository _users;
@@ -23,4 +25,3 @@ public sealed class UsersController : ControllerBase
         return user is null ? NotFound() : Ok(user);
     }
 }
-

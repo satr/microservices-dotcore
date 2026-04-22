@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using BookingService.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookingService.Controllers;
@@ -7,6 +8,7 @@ namespace BookingService.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/inventory")]
+[Authorize] // any authenticated user can read stock; librarian-managed writes would go here
 public sealed class InventoryController : ControllerBase
 {
     private readonly IBookInventoryService _inventory;
@@ -32,4 +34,3 @@ public sealed class InventoryController : ControllerBase
         return Ok(result);
     }
 }
-

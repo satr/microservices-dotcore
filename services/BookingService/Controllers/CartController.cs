@@ -3,6 +3,7 @@ using BookingService.Contracts;
 using BookingService.Messaging;
 using BookingService.Repositories;
 using Library.Contracts.Messages;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookingService.Controllers;
@@ -10,6 +11,7 @@ namespace BookingService.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/cart")]
+[Authorize] // all cart endpoints require authentication
 public sealed class CartController : ControllerBase
 {
     private readonly ICartRepository _carts;
@@ -22,12 +24,14 @@ public sealed class CartController : ControllerBase
     }
 
     [HttpGet("{userId}")]
+    [Authorize(Roles = "member,librarian")]
     public IActionResult GetCart(string userId)
     {
         return Ok(_carts.GetByUser(userId));
     }
 
     [HttpPost("items")]
+    [Authorize(Roles = "member")]
     public async Task<IActionResult> Add([FromBody] AddCartItemRequest request)
     {
         await _publish.PublishAddToCartRequested(new AddToCartRequested(
@@ -42,6 +46,7 @@ public sealed class CartController : ControllerBase
     }
 
     [HttpDelete("items/{bookId}")]
+    [Authorize(Roles = "member")]
     public async Task<IActionResult> Remove(string bookId, [FromQuery] string userId)
     {
         await _publish.PublishRemoveFromCartRequested(new RemoveFromCartRequested(
@@ -54,6 +59,7 @@ public sealed class CartController : ControllerBase
     }
 
     [HttpPost("complete")]
+    [Authorize(Roles = "member")]
     public async Task<IActionResult> Complete([FromQuery] string userId)
     {
         await _publish.PublishCompleteBorrowingRequested(new CompleteBorrowingRequested(
@@ -64,18 +70,18 @@ public sealed class CartController : ControllerBase
         return Accepted();
     }
 
-    // ReSharper disable once UnusedMember.Global
     [HttpGet("failures/{userId}")]
+    [Authorize(Roles = "member,librarian")]
     public IActionResult GetFailures(string userId)
     {
         return Ok(_carts.GetFailuresByUser(userId));
     }
 
     [HttpDelete("failures/{userId}/{bookId}")]
+    [Authorize(Roles = "member,librarian")]
     public IActionResult ClearFailure(string userId, string bookId)
     {
         _carts.ClearFailure(userId, bookId);
         return NoContent();
     }
 }
-
